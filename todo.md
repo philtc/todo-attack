@@ -1,7 +1,7 @@
 # Work
 ## Customer Portal Project
 ### Frontend Tasks
-- [ ] design login page +ui +high-priority due:2025-01-20
+- [ ] (a) design login page +ui +high-priority due:2025-01-20
 - [/] implement dashboard +react +frontend due:2025-01-25
 - [x] setup routing +react
 
