@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo Attack - Web Interface</title>
+    <!-- Using system fonts for CSP compliance -->
+    <style>
+        /* Material Design 3 Theme */
+        :root {
+            /* Material Design 3 Color Tokens */
+            --md-sys-color-primary: #6750A4;
+            --md-sys-color-on-primary: #FFFFFF;
+            --md-sys-color-primary-container: #EADDFF;
+            --md-sys-color-on-primary-container: #21005D;
+            
+            --md-sys-color-secondary: #625B71;
+            --md-sys-color-on-secondary: #FFFFFF;
+            --md-sys-color-secondary-container: #E8DEF8;
+            --md-sys-color-on-secondary-container: #1D192B;
+            
+            --md-sys-color-tertiary: #7D5260;
+            --md-sys-color-on-tertiary: #FFFFFF;
+            --md-sys-color-tertiary-container: #FFD8E4;
+            --md-sys-color-on-tertiary-container: #31111D;
+            
+            --md-sys-color-surface: #FEF7FF;
+            --md-sys-color-on-surface: #1C1B1F;
+            --md-sys-color-surface-variant: #E7E0EC;
+            --md-sys-color-on-surface-variant: #49454F;
+            
+            --md-sys-color-background: #FEF7FF;
+            --md-sys-color-on-background: #1C1B1F;
+            
+            --md-sys-color-error: #BA1A1A;
+            --md-sys-color-on-error: #FFFFFF;
+            --md-sys-color-error-container: #FFDAD6;
+            --md-sys-color-on-error-container: #410002;
+            
+            --md-sys-color-outline: #79747E;
+            --md-sys-color-outline-variant: #CAC4D0;
+            
+            /* Material Design 3 Elevation */
+            --md-sys-elevation-level0: none;
+            --md-sys-elevation-level1: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+            --md-sys-elevation-level2: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
+            --md-sys-elevation-level3: 0px 1px 3px 0px rgba(0, 0, 0, 0.3), 0px 4px 8px 3px rgba(0, 0, 0, 0.15);
+            --md-sys-elevation-level4: 0px 2px 3px 0px rgba(0, 0, 0, 0.3), 0px 6px 10px 4px rgba(0, 0, 0, 0.15);
+            --md-sys-elevation-level5: 0px 4px 4px 0px rgba(0, 0, 0, 0.3), 0px 8px 12px 6px rgba(0, 0, 0, 0.15);
+            
+            /* Material Design 3 Typography */
+            --md-sys-typescale-display-large-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-display-large-size: 57px;
+            --md-sys-typescale-display-medium-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-display-small-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-headline-large-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-headline-medium-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-headline-small-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-title-large-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-title-medium-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-title-small-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-label-large-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-label-medium-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-label-small-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-body-large-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-body-medium-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-body-small-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --md-sys-typescale-body-large-size: 16px;
+            --md-sys-typescale-body-large-weight: 400;
+            --md-sys-typescale-body-medium-size: 14px;
+            --md-sys-typescale-body-medium-weight: 400;
+            
+            --md-sys-typescale-label-large-size: 14px;
+            --md-sys-typescale-label-large-weight: 500;
+        }
+        
+        body {
+            font-family: var(--md-sys-typescale-body-large-font);
+            font-size: var(--md-sys-typescale-body-large-size);
+            font-weight: var(--md-sys-typescale-body-large-weight);
+            margin: 0;
+            padding: 0;
+            background-color: var(--md-sys-color-background);
+            color: var(--md-sys-color-on-background);
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: var(--md-sys-color-surface);
+            border-radius: 28px;
+            box-shadow: var(--md-sys-elevation-level2);
+            padding: 24px;
+            min-height: calc(100vh - 48px);
+            margin-top: 24px;
+            margin-bottom: 24px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--md-sys-color-outline-variant);
+        }
+        
+        .header h1 {
+            font-family: var(--md-sys-typescale-headline-large-font);
+            font-size: var(--md-sys-typescale-headline-large-size);
+            font-weight: var(--md-sys-typescale-headline-large-weight);
+            color: var(--md-sys-color-on-surface);
+            margin: 0;
+        }
+        .filters {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        .filter-btn {
+            padding: 10px 24px;
+            border: 1px solid var(--md-sys-color-outline);
+            background: var(--md-sys-color-surface);
+            color: var(--md-sys-color-on-surface);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+            font-family: var(--md-sys-typescale-label-large-font);
+            font-size: var(--md-sys-typescale-label-large-size);
+            font-weight: var(--md-sys-typescale-label-large-weight);
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            box-shadow: var(--md-sys-elevation-level0);
+        }
+        .filter-btn:hover {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
+            box-shadow: var(--md-sys-elevation-level1);
+        }
+        .filter-btn.active {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
+            border-color: var(--md-sys-color-secondary);
+            box-shadow: var(--md-sys-elevation-level1);
+        }
+        .group {
+            margin-bottom: 32px;
+        }
+        .group-header {
+            font-family: var(--md-sys-typescale-headline-medium-font);
+            font-size: var(--md-sys-typescale-headline-medium-size);
+            font-weight: var(--md-sys-typescale-headline-medium-weight);
+            margin-bottom: 16px;
+            color: var(--md-sys-color-on-surface);
+            cursor: pointer;
+            padding: 16px 20px;
+            background: var(--md-sys-color-surface-variant);
+            border-radius: 16px;
+            border-left: 4px solid var(--md-sys-color-primary);
+            transition: all 0.2s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+            box-shadow: var(--md-sys-elevation-level1);
+        }
+        .group-header:hover {
+            box-shadow: var(--md-sys-elevation-level2);
+            background: var(--md-sys-color-primary-container);
+            color: var(--md-sys-color-on-primary-container);
+        }
+        .subgroup {
+            margin-left: 24px;
+            margin-bottom: 24px;
+        }
+        .subgroup-header {
+            font-family: var(--md-sys-typescale-title-large-font);
+            font-size: var(--md-sys-typescale-title-large-size);
+            font-weight: var(--md-sys-typescale-title-large-weight);
+            margin-bottom: 12px;
+            color: var(--md-sys-color-on-surface-variant);
+            cursor: pointer;
+            padding: 12px 16px;
+            background: var(--md-sys-color-surface);
+            border-radius: 12px;
+            border-left: 3px solid var(--md-sys-color-secondary);
+            transition: all 0.2s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+            box-shadow: var(--md-sys-elevation-level1);
+        }
+        .subgroup-header:hover {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
+            box-shadow: var(--md-sys-elevation-level2);
+        }
+        .task {
+            display: flex;
+            align-items: center;
+            padding: 16px 20px;
+            margin: 8px 0;
+            background: var(--md-sys-color-surface);
+            border: 1px solid var(--md-sys-color-outline-variant);
+            border-radius: 12px;
+            transition: all 0.2s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+            box-shadow: var(--md-sys-elevation-level1);
+        }
+        .task:hover {
+            box-shadow: var(--md-sys-elevation-level2);
+            border-color: var(--md-sys-color-primary);
+            background: var(--md-sys-color-primary-container);
+        }
+        .task-status {
+            cursor: pointer;
+            margin-right: 12px;
+            font-size: 20px;
+            color: var(--md-sys-color-primary);
+            transition: color 0.2s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+        }
+        .task-status:hover {
+            color: var(--md-sys-color-on-primary-container);
+        }
+        .toggle-icon {
+            margin-right: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            vertical-align: middle;
+            display: inline-block;
+            min-width: 20px;
+            text-align: center;
+            font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+        }
+        /* Material Icons CSS removed - using Unicode symbols for CSP compliance */
+        .task-text {
+            flex: 1;
+            margin-right: 12px;
+            font-family: var(--md-sys-typescale-body-large-font);
+            font-size: var(--md-sys-typescale-body-large-size);
+            color: var(--md-sys-color-on-surface);
+        }
+        .task-tags {
+            display: flex;
+            gap: 5px;
+            margin-right: 12px;
+        }
+        .tag {
+            background: var(--md-sys-color-tertiary-container);
+            color: var(--md-sys-color-on-tertiary-container);
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-family: var(--md-sys-typescale-label-large-font);
+            font-size: 12px;
+            font-weight: var(--md-sys-typescale-label-large-weight);
+            transition: all 0.2s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+        }
+        .task-due {
+            font-family: var(--md-sys-typescale-body-medium-font);
+            font-size: var(--md-sys-typescale-body-medium-size);
+            color: var(--md-sys-color-on-surface-variant);
+            margin-right: 12px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            background: var(--md-sys-color-surface-variant);
+        }
+        .task-due.overdue {
+            color: var(--md-sys-color-on-error-container);
+            background: var(--md-sys-color-error-container);
+            font-weight: 500;
+        }
+        .task-due.today {
+            color: var(--md-sys-color-on-tertiary-container);
+            background: var(--md-sys-color-tertiary-container);
+            font-weight: 500;
+        }
+        .task-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .action-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--md-sys-color-outline);
+            background: var(--md-sys-color-surface);
+            color: var(--md-sys-color-on-surface);
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: var(--md-sys-typescale-label-large-font);
+            font-size: var(--md-sys-typescale-label-large-size);
+            font-weight: var(--md-sys-typescale-label-large-weight);
+            transition: all 0.2s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+            min-height: 36px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .action-btn:hover {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
+            box-shadow: var(--md-sys-elevation-level1);
+        }
+        .status-pending { color: #666; }
+        .status-progress { color: #ff9800; }
+        .status-completed { color: #4caf50; }
+        .collapsed {
+            display: none;
+        }
+        .search-box {
+            width: 300px;
+            padding: 12px 16px;
+            border: 1px solid var(--md-sys-color-outline);
+            background: var(--md-sys-color-surface);
+            color: var(--md-sys-color-on-surface);
+            border-radius: 28px;
+            font-family: var(--md-sys-typescale-body-large-font);
+            font-size: var(--md-sys-typescale-body-large-size);
+            transition: all 0.2s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+            outline: none;
+        }
+        .search-box:focus {
+            border-color: var(--md-sys-color-primary);
+            box-shadow: var(--md-sys-elevation-level1);
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .current-file {
+            font-family: var(--md-sys-typescale-label-large-font);
+            font-size: var(--md-sys-typescale-label-large-size);
+            font-weight: var(--md-sys-typescale-label-large-weight);
+            color: var(--md-sys-color-on-secondary-container);
+            background: var(--md-sys-color-secondary-container);
+            padding: 8px 16px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: #000;
+        }
+        .file-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+        .file-item:hover {
+            background-color: #f5f5f5;
+        }
+        .file-item.selected {
+            background-color: #e3f2fd;
+        }
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        #editor {
+            width: 100%;
+            height: 400px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            resize: vertical;
+        }
+        .editor-controls {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📝 Todo Attack</h1>
+            <div class="header-controls">
+                <div class="file-info">
+                    <span class="current-file">📄 {{ current_file | e }}</span>
+                    <button class="action-btn" onclick="showFileManager()">📁 Files</button>
+                    <button class="action-btn" onclick="showEditor()">✏️ Edit</button>
+                    <button class="action-btn" onclick="downloadFile()">💾 Download</button>
+                </div>
+                <input type="text" id="search" class="search-box" placeholder="Search tasks or filter by tags...">
+            </div>
+        </div>
+        
+        <div class="filters">
+            <button class="filter-btn active" data-filter="all">All Tasks</button>
+            <button class="filter-btn" data-filter="pending">Pending</button>
+            <button class="filter-btn" data-filter="progress">In Progress</button>
+            <button class="filter-btn" data-filter="completed">Completed</button>
+            <button class="filter-btn" data-filter="overdue">Overdue</button>
+        </div>
+
+        <div id="tasks-container">
+            {% for group in groups %}
+            <div class="group" data-group="{{ group.name }}">
+                <div class="group-header" onclick="toggleGroup(this)" 
+                     {% if group.color %}style="border-left-color: {{ group.color }}; background: {{ group.get_color_with_alpha(0.1) }};"{% endif %}>
+                     <span class="toggle-icon">📂</span> {{ group.get_display_name() | e }}
+                </div>
+                <div class="group-content">
+                    {% for task in group.tasks %}
+                    <div class="task" data-line="{{ task.line_number }}" data-status="{{ task.status.name.lower() }}" data-tags="{{ task.tags|join(',') }}">
+                        <span class="task-status" onclick="toggleTaskStatus({{ task.line_number }})">
+                            {% if task.status.name == 'PENDING' %}☐
+                            {% elif task.status.name == 'IN_PROGRESS' %}◐
+                            {% elif task.status.name == 'COMPLETED' %}☑
+                            {% endif %}
+                        </span>
+                        <div class="task-text">{{ task.get_clean_text() | e }}</div>
+                        <div class="task-tags">
+                            {% for tag in task.tags %}
+                            <span class="tag">#{{ tag | e }}</span>
+                            {% endfor %}
+                        </div>
+                        {% if task.due_date %}
+                        <div class="task-due {% if task.due_date < today and task.status.name != 'COMPLETED' %}overdue{% elif task.due_date == today %}today{% endif %}">
+                            <span>📅</span> {{ task.due_date }}
+                        </div>
+                        {% endif %}
+                        <div class="task-actions">
+                            <button class="action-btn" onclick="addDueDate({{ task.line_number }})">📅 Today</button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    
+                    {% for subgroup in group.children %}
+                    <div class="subgroup">
+                        <div class="subgroup-header" onclick="toggleGroup(this)"
+                             {% if subgroup.color %}style="border-left-color: {{ subgroup.color }}; background: {{ subgroup.get_color_with_alpha(0.08) }};"{% endif %}>
+                            <span class="toggle-icon">📂</span> {{ subgroup.get_display_name() | e }}
+                        </div>
+                        <div class="group-content">
+                            {% for task in subgroup.tasks %}
+                            <div class="task" data-line="{{ task.line_number }}" data-status="{{ task.status.name.lower() }}" data-tags="{{ task.tags|join(',') if task.tags else '' }}">
+                                <span class="task-status status-{{ task.status.name.lower() }}" onclick="toggleTaskStatus({{ task.line_number }})">
+                                    {% if task.status.name == 'PENDING' %}⭕
+                                    {% elif task.status.name == 'IN_PROGRESS' %}🔄
+                                    {% else %}✅{% endif %}
+                                </span>
+                                <div class="task-text">{{ task.get_clean_text() }}</div>
+                                <div class="task-tags">
+                                    {% for tag in task.tags %}
+                                    <span class="tag">#{{ tag }}</span>
+                                    {% endfor %}
+                                </div>
+                                {% if task.due_date %}
+                                <div class="task-due {% if task.due_date < today and task.status.name != 'COMPLETED' %}overdue{% elif task.due_date == today %}today{% endif %}">
+                                    <span>📅</span> {{ task.due_date }}
+                                </div>
+                                {% endif %}
+                                <div class="task-actions">
+                                    <button class="action-btn" onclick="addDueDate({{ task.line_number }})">📅 Today</button>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            
+                            {% for subsubgroup in subgroup.children %}
+                            <div class="subgroup" style="margin-left: 20px;">
+                                <div class="subgroup-header" onclick="toggleGroup(this)"
+                                     {% if subsubgroup.color %}style="border-left-color: {{ subsubgroup.color }}; background: {{ subsubgroup.get_color_with_alpha(0.06) }}; margin-left: 20px;"{% endif %}>
+                                    <span class="toggle-icon material-symbols-outlined">folder_open</span> {{ subsubgroup.get_display_name() | e }}
+                                </div>
+                                <div class="group-content">
+                                    {% for task in subsubgroup.tasks %}
+                                    <div class="task" data-line="{{ task.line_number }}" data-status="{{ task.status.name.lower() }}" data-tags="{{ task.tags|join(',') if task.tags else '' }}">
+                                        <span class="task-status status-{{ task.status.name.lower() }}" onclick="toggleTaskStatus({{ task.line_number }})">
+                                            {% if task.status.name == 'PENDING' %}⭕
+                                            {% elif task.status.name == 'IN_PROGRESS' %}🔄
+                                            {% else %}✅{% endif %}
+                                        </span>
+                                        <div class="task-text">{{ task.get_clean_text() }}</div>
+                                        <div class="task-tags">
+                                            {% for tag in task.tags %}
+                                            <span class="tag">#{{ tag }}</span>
+                                            {% endfor %}
+                                        </div>
+                                        {% if task.due_date %}
+                                        <div class="task-due {% if task.due_date < today and task.status.name != 'COMPLETED' %}overdue{% elif task.due_date == today %}today{% endif %}">
+                                            <span>📅</span> {{ task.due_date }}
+                                        </div>
+                                        {% endif %}
+                                        <div class="task-actions">
+                                            <button class="action-btn" onclick="addDueDate({{ task.line_number }})">📅 Today</button>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- File Manager Modal -->
+    <div id="fileModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📁 File Manager</h2>
+                <span class="close" onclick="closeModal('fileModal')">&times;</span>
+            </div>
+            
+            <div class="upload-area" id="uploadArea">
+                <p>📤 Drag & drop a .md file here or click to select</p>
+                <input type="file" id="fileInput" accept=".md" style="display: none;">
+                <button class="action-btn" onclick="document.getElementById('fileInput').click()">Choose File</button>
+            </div>
+            
+            <h3>Available Files</h3>
+            <div class="file-list" id="fileList">
+                <!-- Files will be loaded here -->
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <button class="action-btn" onclick="selectFile()">📂 Open Selected</button>
+                <button class="action-btn" onclick="refreshFileList()">🔄 Refresh</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Editor Modal -->
+    <div id="editorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✏️ Edit File</h2>
+                <span class="close" onclick="closeModal('editorModal')">&times;</span>
+            </div>
+            
+            <textarea id="editor" placeholder="Loading file content..."></textarea>
+            
+            <div class="editor-controls">
+                <button class="action-btn" onclick="saveFile()">💾 Save</button>
+                <button class="action-btn" onclick="loadFileContent()">🔄 Reload</button>
+                <button class="action-btn" onclick="closeModal('editorModal')">❌ Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Filter functionality
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Update active button
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                
+                const filter = this.dataset.filter;
+                filterTasks(filter);
+            });
+        });
+
+        function filterTasks(filter) {
+            const tasks = document.querySelectorAll('.task');
+            tasks.forEach(task => {
+                const status = task.dataset.status;
+                let show = false;
+                
+                switch(filter) {
+                    case 'all':
+                        show = true;
+                        break;
+                    case 'pending':
+                        show = status === 'pending';
+                        break;
+                    case 'progress':
+                        show = status === 'in_progress';
+                        break;
+                    case 'completed':
+                        show = status === 'completed';
+                        break;
+                    case 'overdue':
+                        const dueElement = task.querySelector('.task-due');
+                        show = dueElement && dueElement.classList.contains('overdue');
+                        break;
+                }
+                
+                task.style.display = show ? 'flex' : 'none';
+            });
+        }
+
+        // Search functionality
+        document.getElementById('search').addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const tasks = document.querySelectorAll('.task');
+            
+            tasks.forEach(task => {
+                const text = task.querySelector('.task-text').textContent.toLowerCase();
+                const tags = task.dataset.tags.toLowerCase();
+                const matches = text.includes(searchTerm) || tags.includes(searchTerm);
+                task.style.display = matches ? 'flex' : 'none';
+            });
+        });
+
+        // Group folding
+        function toggleGroup(header) {
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('.toggle-icon');
+            
+            if (content.classList.contains('collapsed')) {
+                content.classList.remove('collapsed');
+                icon.textContent = '📂'; // Open folder when expanded
+            } else {
+                content.classList.add('collapsed');
+                icon.textContent = '📁'; // Closed folder when collapsed
+            }
+        }
+
+        // Task status toggling
+        async function toggleTaskStatus(lineNumber) {
+            try {
+                const response = await fetch(`/api/toggle_task/${lineNumber}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                if (response.ok) {
+                    location.reload(); // Simple refresh for now
+                } else {
+                    alert('Error updating task status');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Add due date
+        async function addDueDate(lineNumber) {
+            try {
+                const response = await fetch(`/api/add_due_date/${lineNumber}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                if (response.ok) {
+                    location.reload(); // Simple refresh for now
+                } else {
+                    alert('Error adding due date');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // File Management Functions
+        let selectedFile = null;
+        
+        function showFileManager() {
+            document.getElementById('fileModal').style.display = 'block';
+            refreshFileList();
+        }
+        
+        function showEditor() {
+            document.getElementById('editorModal').style.display = 'block';
+            loadFileContent();
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+        
+        function refreshFileList() {
+            fetch('/list_files')
+                .then(response => response.json())
+                .then(data => {
+                    const fileList = document.getElementById('fileList');
+                    fileList.innerHTML = '';
+                    
+                    data.files.forEach(file => {
+                        const fileItem = document.createElement('div');
+                        fileItem.className = 'file-item';
+                        fileItem.onclick = () => selectFileItem(fileItem, file);
+                        
+                        const sizeKB = Math.round(file.size / 1024);
+                        fileItem.innerHTML = `
+                            <div>
+                                <strong>${file.name}</strong>
+                                <br><small>${file.location} • ${sizeKB} KB</small>
+                            </div>
+                            <button class="action-btn" onclick="downloadFileByPath('${file.path}'); event.stopPropagation();">💾</button>
+                        `;
+                        
+                        fileList.appendChild(fileItem);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading files:', error);
+                    alert('Error loading file list');
+                });
+        }
+        
+        function selectFileItem(element, file) {
+            // Remove previous selection
+            document.querySelectorAll('.file-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            // Select current item
+            element.classList.add('selected');
+            selectedFile = file;
+        }
+        
+        function selectFile() {
+            if (!selectedFile) {
+                alert('Please select a file first');
+                return;
+            }
+            
+            fetch('/select_file', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({filename: selectedFile.path})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error selecting file: ' + error.message);
+            });
+        }
+        
+        function loadFileContent() {
+            fetch('/get_file_content')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('editor').value = data.content;
+                    } else {
+                        alert('Error loading file: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error loading file content: ' + error.message);
+                });
+        }
+        
+        function saveFile() {
+            const content = document.getElementById('editor').value;
+            
+            fetch('/save_file_content', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({content: content})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('File saved successfully!');
+                    location.reload();
+                } else {
+                    alert('Error saving file: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error saving file: ' + error.message);
+            });
+        }
+        
+        function downloadFile() {
+            window.location.href = '/download/{{ current_file }}';
+        }
+        
+        function downloadFileByPath(filepath) {
+            window.location.href = '/download/' + filepath;
+        }
+        
+        // File upload handling
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                uploadFile(file);
+            }
+        });
+        
+        // Drag and drop functionality
+        const uploadArea = document.getElementById('uploadArea');
+        
+        uploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                uploadFile(files[0]);
+            }
+        });
+        
+        function uploadFile(file) {
+            if (!file.name.endsWith('.md')) {
+                alert('Please upload a .md file');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error uploading file: ' + error.message);
+            });
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey) {
+                switch(e.key) {
+                    case 't':
+                        e.preventDefault();
+                        // Toggle status of first visible task (simplified)
+                        const firstTask = document.querySelector('.task:not([style*="display: none"])');
+                        if (firstTask) {
+                            const lineNumber = firstTask.dataset.line;
+                            toggleTaskStatus(parseInt(lineNumber));
+                        }
+                        break;
+                    case 'd':
+                        e.preventDefault();
+                        // Add due date to first visible task (simplified)
+                        const firstTaskForDate = document.querySelector('.task:not([style*="display: none"])');
+                        if (firstTaskForDate) {
+                            const lineNumber = firstTaskForDate.dataset.line;
+                            addDueDate(parseInt(lineNumber));
+                        }
+                        break;
+                    case 's':
+                        e.preventDefault();
+                        // Quick save shortcut
+                        if (document.getElementById('editorModal').style.display === 'block') {
+                            saveFile();
+                        }
+                        break;
+                    case 'o':
+                        e.preventDefault();
+                        // Quick open file manager
+                        showFileManager();
+                        break;
+                    case 'e':
+                        e.preventDefault();
+                        // Quick open editor
+                        showEditor();
+                        break;
+                }
+            }
+        });
+        
+        // Initialize folder icons based on actual content visibility
+        function initializeFolderIcons() {
+            // Find all group headers with toggle icons
+            const headers = document.querySelectorAll('.group-header, .subgroup-header');
+            
+            headers.forEach(header => {
+                const content = header.nextElementSibling;
+                const icon = header.querySelector('.toggle-icon');
+                
+                if (content && icon) {
+                    // Check if content is visible (not collapsed)
+                    const isExpanded = !content.classList.contains('collapsed');
+                    
+                    // Set icon based on actual visibility state
+                    icon.textContent = isExpanded ? '📂' : '📁';
+                }
+            });
+        }
+        
+        // Run initialization when page loads
+        document.addEventListener('DOMContentLoaded', initializeFolderIcons);
+        
+        // Also run after a short delay to ensure everything is rendered
+        setTimeout(initializeFolderIcons, 100);
+    </script>
+</body>
+</html>
