@@ -123,28 +123,3 @@ The main todo file (`todo.md`) serves as the central task database, organized by
 2. Specific projects within categories  
 3. Task groups within projects
 4. Individual actionable items
-
-This structure scales from personal use to team collaboration while maintaining simplicity and readability.
-
-
-Create a simple, secure, web-based text editor hosted on a LAMP server using Ace Editor. The editor will:
-
-Read and write content to a single text file.
-Provide real-time syntax highlighting for both Markdown and Todo list items (e.g., [ ], [x]).
-Support basic custom keyboard shortcuts.
-1. Requirements
-Technical Stack
-Frontend:
-Ace Editor (with a custom syntax mode)
-HTML, CSS, JavaScript
-Backend:
-PHP (file read/write logic)
-Server:
-LAMP (Linux, Apache, MySQL, PHP)
-File permissions configured for secure editing
-
-Functional Features
-Single-file editing
-Markdown + todo-list highlighting (checkboxes, completed tasks)
-Save/load file functionality
-Custom keyboard shortcuts (e.g., auto insert task, save)
