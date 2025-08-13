@@ -99,6 +99,132 @@ function initEditor() {
     // Register the todo language
     monaco.languages.register({ id: 'todo' });
     
+    // Register custom commands
+    monaco.editor.defineTheme('todo-attack', {
+        base: 'vs',
+        inherit: true,
+        rules: [
+            { token: 'meta.task.pending', foreground: 'FF5722' },
+            { token: 'meta.task.inprogress', foreground: '2196F3' },
+            { token: 'meta.task.completed', foreground: '4CAF50', textDecoration: 'line-through' },
+            { token: 'markup.heading', foreground: '673AB7', fontStyle: 'bold' },
+            { token: 'entity.name.tag', foreground: '9C27B0' },
+            { token: 'keyword.other.due', foreground: 'FF9800' },
+            { token: 'keyword.other.priority', foreground: 'F44336', fontStyle: 'bold' }
+        ]
+    });
+    
+    // Register custom editor actions
+    monaco.editor.addEditorAction({
+        id: 'indentTask',
+        label: 'Indent Task',
+        keybindings: [monaco.KeyCode.Tab],
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.5,
+        run: function(editor) {
+            const selection = editor.getSelection();
+            const model = editor.getModel();
+            const lineNumber = selection.positionLineNumber;
+            const line = model.getLineContent(lineNumber);
+            
+            // Only handle task lines
+            if (/^\s*[-*+]\s*\[.\]/.test(line)) {
+                const indentMatch = line.match(/^(\s*)/);
+                const currentIndent = indentMatch ? indentMatch[1] : '';
+                const newIndent = currentIndent + '    ';
+                
+                model.pushEditOperations(
+                    [],
+                    [{
+                        range: new monaco.Range(lineNumber, 1, lineNumber, currentIndent.length + 1),
+                        text: newIndent
+                    }],
+                    () => null
+                );
+                
+                // Move cursor to the right position
+                const position = selection.getPosition();
+                const newColumn = position.column + 4;
+                editor.setPosition({ lineNumber: position.lineNumber, column: newColumn });
+                return;
+            }
+            
+            // Default tab behavior
+            editor.trigger('keyboard', 'tab', {});
+        }
+    });
+    
+    // Register Enter key handler
+    monaco.editor.addEditorAction({
+        id: 'newTaskLine',
+        label: 'New Task Line',
+        keybindings: [monaco.KeyCode.Enter],
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.6,
+        run: function(editor) {
+            const selection = editor.getSelection();
+            const model = editor.getModel();
+            const lineNumber = selection.positionLineNumber;
+            const line = model.getLineContent(lineNumber);
+            
+            // Only handle task lines
+            if (/^\s*[-*+]\s*\[.\]/.test(line)) {
+                const indentMatch = line.match(/^(\s*)/);
+                const currentIndent = indentMatch ? indentMatch[1] : '';
+                const newLine = '\n' + currentIndent + '- [ ] ';
+                
+                // If at the end of the line, just insert a new task
+                if (selection.positionColumn >= line.length) {
+                    model.pushEditOperations(
+                        [],
+                        [{
+                            range: new monaco.Range(lineNumber, line.length + 1, lineNumber, line.length + 1),
+                            text: newLine
+                        }],
+                        () => null
+                    );
+                    
+                    // Position cursor on the new line after the task marker
+                    editor.setPosition({
+                        lineNumber: lineNumber + 1,
+                        column: newLine.length + 1
+                    });
+                    return;
+                }
+                
+                // If in the middle of the line, split it
+                const position = selection.getPosition();
+                const before = line.substring(0, position.column - 1);
+                const after = line.substring(position.column - 1);
+                
+                model.pushEditOperations(
+                    [],
+                    [
+                        {
+                            range: new monaco.Range(lineNumber, 1, lineNumber, position.column),
+                            text: before + '\n' + currentIndent + '- [ ] '
+                        },
+                        {
+                            range: new monaco.Range(lineNumber, position.column, lineNumber, line.length + 1),
+                            text: after
+                        }
+                    ],
+                    () => null
+                );
+                
+                // Position cursor on the new line after the task marker
+                editor.setPosition({
+                    lineNumber: lineNumber + 1,
+                    column: currentIndent.length + 7 // Position after "- [ ] "
+                });
+                return;
+            }
+            
+            // Default enter behavior
+            editor.trigger('keyboard', 'enter', {});
+        }
+    });
+    
     // Register a folding range provider for todo language
     monaco.languages.registerFoldingRangeProvider('todo', {
         provideFoldingRanges: function(model, context, token) {
@@ -302,7 +428,7 @@ function initEditor() {
         autoClosingBrackets: 'languageDefined',
         autoClosingQuotes: 'languageDefined',
         autoIndent: 'full',
-        fontFamily: '"Fira Code", "Courier New", monospace',
+        fontFamily: '"Roboto Mono", monospace',
         fontLigatures: true,
         scrollBeyondLastLine: false,
         tabCompletion: 'on',
@@ -562,57 +688,54 @@ function toggleHelp() {
     helpEl.classList.toggle('show');
 }
 
-// Auto-completion for tags and common patterns
+// Auto-completion for tags and due dates only
 function setupAutoCompletion() {
-    // Define our completion items
+    // Define our completion items - only tags and due dates
     const todoCompletions = [
-        // Priority levels
-        { label: '(a) High Priority', insertText: '(a) ', kind: monaco.languages.CompletionItemKind.Value, detail: 'Priority' },
-        { label: '(b) Medium Priority', insertText: '(b) ', kind: monaco.languages.CompletionItemKind.Value, detail: 'Priority' },
-        { label: '(c) Low Priority', insertText: '(c) ', kind: monaco.languages.CompletionItemKind.Value, detail: 'Priority' },
-        
         // Common tags
-        { label: '+ui', insertText: '+ui ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
-        { label: '+react', insertText: '+react ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
-        { label: '+api', insertText: '+api ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
-        { label: '+database', insertText: '+database ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
-        { label: '+frontend', insertText: '+frontend ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
-        { label: '+backend', insertText: '+backend ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
-        { label: '+testing', insertText: '+testing ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
-        { label: '+bug', insertText: '+bug ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
-        { label: '+feature', insertText: '+feature ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
-        { label: '+refactor', insertText: '+refactor ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
-        { label: '+high-priority', insertText: '+high-priority ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
-        { label: '+critical', insertText: '+critical ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
-        { label: '+low-priority', insertText: '+low-priority ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
+        { label: '+ui', insertText: 'ui ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
+        { label: '+react', insertText: 'react ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
+        { label: '+api', insertText: 'api ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
+        { label: '+database', insertText: 'database ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
+        { label: '+frontend', insertText: 'frontend ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
+        { label: '+backend', insertText: 'backend ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
+        { label: '+testing', insertText: 'testing ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
+        { label: '+bug', insertText: 'bug ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
+        { label: '+feature', insertText: 'feature ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
+        { label: '+refactor', insertText: 'refactor ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
+        { label: '+high-priority', insertText: 'high-priority ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
+        { label: '+critical', insertText: 'critical ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
+        { label: '+low-priority', insertText: 'low-priority ', kind: monaco.languages.CompletionItemKind.Keyword, detail: 'Tag' },
         
         // Date templates
         { 
             label: 'due:today', 
-            insertText: `due:${new Date().toISOString().split('T')[0]} `, 
+            insertText: `due:${new Date().toISOString().split('T')[0]}`, 
             kind: monaco.languages.CompletionItemKind.Event,
             detail: 'Due date',
             documentation: `Due date: ${new Date().toISOString().split('T')[0]}`
         },
         { 
             label: 'due:tomorrow',
-            insertText: `due:${new Date(Date.now() + 86400000).toISOString().split('T')[0]} `,
+            insertText: `due:${new Date(Date.now() + 86400000).toISOString().split('T')[0]}`,
             kind: monaco.languages.CompletionItemKind.Event,
             detail: 'Due date',
             documentation: `Due date: ${new Date(Date.now() + 86400000).toISOString().split('T')[0]}`
         },
-        
-        // Task templates
-        { label: '- [ ] Task', insertText: '- [ ] ', kind: monaco.languages.CompletionItemKind.Snippet, detail: 'Task template' },
-        { label: '- [/] In Progress', insertText: '- [/] ', kind: monaco.languages.CompletionItemKind.Snippet, detail: 'Task template' },
-        { label: '- [x] Completed', insertText: '- [x] ', kind: monaco.languages.CompletionItemKind.Snippet, detail: 'Task template' }
-    ];
+        { 
+            label: 'due:nextweek',
+            insertText: `due:${new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]}`,
+            kind: monaco.languages.CompletionItemKind.Event,
+            detail: 'Due date',
+            documentation: `Due date: ${new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]}`
+        }
+    ]; // Close the todoCompletions array
 
     // Register a completion item provider for the 'todo' language
     monaco.languages.registerCompletionItemProvider('todo', {
         provideCompletionItems: function(model, position) {
             // Get the text until the current position
-            const textUntilPosition = model.getValueInRange({
+            const textUntilCursor = model.getValueInRange({
                 startLineNumber: position.lineNumber,
                 startColumn: 1,
                 endLineNumber: position.lineNumber,
@@ -628,16 +751,46 @@ function setupAutoCompletion() {
                 endColumn: word.endColumn
             };
             
-            // Filter completions based on the current word
-            const filtered = todoCompletions.filter(completion => 
-                completion.label.toLowerCase().includes(word.word.toLowerCase())
-            );
+            // Only show completions after + (for tags) or after 'due:' (for dates)
+            const lastPlusIndex = textUntilCursor.lastIndexOf('+');
+            const lastDueIndex = textUntilCursor.lastIndexOf('due:');
             
-            return { suggestions: filtered.map(item => ({
-                ...item,
-                range: range,
-                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
-            })) };
+            // Check if we're after a + or due:
+            const isAfterPlus = lastPlusIndex > -1 && 
+                (lastDueIndex === -1 || lastPlusIndex > lastDueIndex);
+            const isAfterDue = lastDueIndex > -1 && 
+                (lastPlusIndex === -1 || lastDueIndex > lastPlusIndex);
+            
+            let filtered = [];
+            
+            if (isAfterPlus) {
+                // Show tag completions (without the + in insert text)
+                const tagPrefix = textUntilCursor.substring(lastPlusIndex + 1).toLowerCase();
+                filtered = todoCompletions
+                    .filter(completion => completion.kind === monaco.languages.CompletionItemKind.Keyword)
+                    .filter(completion => completion.label.substring(1).toLowerCase().startsWith(tagPrefix));
+                
+                // Adjust the range to replace from the +
+                range.startColumn = lastPlusIndex + 1;
+            } else if (isAfterDue) {
+                // Show date completions
+                const datePrefix = textUntilCursor.substring(lastDueIndex + 4).toLowerCase();
+                filtered = todoCompletions
+                    .filter(completion => completion.kind === monaco.languages.CompletionItemKind.Event)
+                    .filter(completion => completion.label.toLowerCase().includes(datePrefix));
+                
+                // Adjust the range to replace from after 'due:'
+                range.startColumn = lastDueIndex + 4;
+            }
+            
+            return { 
+                suggestions: filtered.map(item => ({
+                    ...item,
+                    range: range,
+                    insertText: item.insertText, // Use the insertText as is (without + for tags)
+                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+                })) 
+            };
         }
     });
     

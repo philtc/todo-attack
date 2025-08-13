@@ -72,11 +72,29 @@ ace.define("ace/mode/todo", ["require", "exports", "module", "ace/lib/oop", "ace
                 token: "text",
                 regex: /#[0-9A-Fa-f]{6}/
             },
-            // Headers - bold
+            // Headers with color codes - match the entire line as one token
             {
-                token: "markup.heading",
-                regex: /^#{1,3}\s+.*$/,
-                merge: false
+                token: function(value) {
+                    // This will match the entire heading line including the # and hex code
+                    return "heading-line";
+                },
+                regex: /^#{1,3}[^\n]*?(?:#[0-9A-Fa-f]{6})?$/,
+                merge: false,
+                caseInsensitive: true,
+                next: "headingContent"
+            },
+            // This state handles the actual content of the heading
+            {
+                defaultToken: "heading-line",
+                token: function(value) {
+                    if (/#[0-9A-Fa-f]{6}$/i.test(value)) {
+                        const hexColor = value.match(/#([0-9A-Fa-f]{6})$/i)[0].toLowerCase();
+                        return `heading-line heading-color-${hexColor.substring(1)}`;
+                    }
+                    return "heading-line";
+                },
+                regex: ".+",
+                next: "start"
             },
             // Completed tasks - light grey
             {
@@ -233,15 +251,62 @@ ace.define("ace/mode/todo", ["require", "exports", "module", "ace/lib/oop", "ace
                 // Get current line and cursor position
                 var line = session.getLine(row);
                 var cursor = session.selection.getCursor();
+                var selection = session.selection;
                 
+                // If there's a selection, indent all selected lines
+                if (!selection.isEmpty()) {
+                    var range = selection.getRange();
+                    var startRow = range.start.row;
+                    var endRow = range.end.row;
+                    
+                    // If selection ends at column 0, don't include the last line
+                    if (range.end.column === 0 && endRow > startRow) {
+                        endRow--;
+                    }
+                    
+                    // Indent each selected line
+                    for (var i = startRow; i <= endRow; i++) {
+                        var lineContent = session.getLine(i);
+                        var indent = this.$getIndent(lineContent);
+                        var newIndent = '    ' + indent;
+                        session.doc.replace(
+                            new Range(i, 0, i, indent.length),
+                            newIndent
+                        );
+                    }
+                    
+                    // Adjust the selection
+                    if (startRow === endRow) {
+                        selection.setSelectionRange({
+                            start: { row: startRow, column: range.start.column + 4 },
+                            end: { row: endRow, column: range.end.column + 4 }
+                        });
+                    } else {
+                        selection.setSelectionRange({
+                            start: { row: startRow, column: range.start.column + 4 },
+                            end: { row: endRow, column: range.end.column }
+                        });
+                    }
+                    
+                    return {
+                        indent: '',
+                        type: 'text',
+                        match: ''
+                    };
+                }
                 // If it's a task line, indent it
-                if (/^\s*[-*+]\s*\[.\]/.test(line)) {
+                else if (/^\s*[-*+]\s*\[.\]/.test(line)) {
                     var indent = this.$getIndent(line);
                     var newIndent = indent + '    ';
                     session.doc.replace(
                         new Range(row, 0, row, indent.length),
                         newIndent
                     );
+                    
+                    // Move cursor to the right position after indentation
+                    var newColumn = column + 4 - (column % 4) + (column % 4 === 0 ? 4 : 0);
+                    selection.moveCursorTo(row, newColumn);
+                    
                     return {
                         indent: newIndent,
                         type: 'text',
@@ -254,19 +319,89 @@ ace.define("ace/mode/todo", ["require", "exports", "module", "ace/lib/oop", "ace
         
         // Handle shift+tab for outdenting
         this.autoOutdent = function(state, session, row) {
-            var line = session.getLine(row);
-            var match = line.match(/^\s*/)[0];
+            var selection = session.selection;
+            var range = selection.getRange();
+            var startRow = range.start.row;
+            var endRow = range.end.row;
             
-            if (match.length >= 4) {
-                // Remove 4 spaces or a tab
-                var newIndent = match.replace(/^ {4}|^\t/, '');
-                session.doc.replace(
-                    new Range(row, 0, row, match.length),
-                    newIndent
-                );
+            // If there's a selection, outdent all selected lines
+            if (!selection.isEmpty() && endRow > startRow) {
+                for (var i = startRow; i <= endRow; i++) {
+                    var line = session.getLine(i);
+                    var match = line.match(/^\s*/)[0];
+                    
+                    if (match.length >= 4) {
+                        var newIndent = match.replace(/^ {4}|^\t/, '');
+                        session.doc.replace(
+                            new Range(i, 0, i, match.length),
+                            newIndent
+                        );
+                    }
+                }
                 return true;
             }
+            // Single line outdent
+            else {
+                var line = session.getLine(row);
+                var match = line.match(/^\s*/)[0];
+                
+                if (match.length >= 4) {
+                    var newIndent = match.replace(/^ {4}|^\t/, '');
+                    session.doc.replace(
+                        new Range(row, 0, row, match.length),
+                        newIndent
+                    );
+                    
+                    // Adjust cursor position
+                    var cursor = selection.getCursor();
+                    var newColumn = Math.max(0, cursor.column - 4);
+                    selection.moveCursorTo(cursor.row, newColumn);
+                    
+                    return true;
+                }
+            }
             return false;
+        };
+        
+        // Handle Enter key for task lines
+        this.onEnter = function(state, session, range) {
+            var cursor = range.start;
+            var line = session.getLine(cursor.row);
+            var match = line.match(/^(\s*[-*+]\s*\[[ x]\])(\s*)/);
+            
+            if (match) {
+                // Get the current indentation and task marker
+                var indent = match[1].length + match[2].length;
+                var currentIndent = line.match(/^\s*/)[0];
+                
+                // Insert new line with the same indentation and task marker
+                var newLine = '\n' + currentIndent + '- [ ] ';
+                
+                // If we're at the end of the line, just insert the new task
+                if (cursor.column >= line.length) {
+                    session.doc.replace(range, newLine);
+                    return {
+                        indent: currentIndent + '    ',
+                        text: newLine,
+                        selection: [1, newLine.length]
+                    };
+                }
+                // If we're in the middle of the line, split it
+                else {
+                    var before = line.substring(0, cursor.column);
+                    var after = line.substring(cursor.column);
+                    
+                    session.doc.replace(range, '\n' + currentIndent + after);
+                    
+                    return {
+                        text: '\n' + currentIndent + '- [ ] ',
+                        selection: [1, currentIndent.length + 6] // Position after the task marker
+                    };
+                }
+            }
+            
+            // Default behavior for non-task lines
+            return this.$getIndent(line);
         };
         
         this.$id = "ace/mode/todo";
@@ -411,6 +546,12 @@ ace.define("ace/theme/todo-attack", ["require", "exports", "module", "ace/lib/do
 /* Set Roboto Mono as the default font */
 .ace-todo-attack {
     font-family: 'Roboto Mono', monospace !important;
+    line-height: 1.5 !important;
+}
+
+/* Ensure all text in the editor uses Roboto Mono */
+.ace-todo-attack * {
+    font-family: 'Roboto Mono', monospace !important;
 }
 
 /* Style for tags */
@@ -501,6 +642,73 @@ ace.define("ace/theme/todo-attack", ["require", "exports", "module", "ace/lib/do
 .ace-todo-attack .ace_markup.ace_heading.ace_3 {
     color: #64b5f6;
     font-weight: bold;
+}
+
+/* Heading line styling - applies to the entire line */
+.ace-todo-attack .ace_heading-line {
+    font-weight: bold !important;
+}
+
+/* Apply colors to heading lines */
+.ace-todo-attack .ace_heading-line.heading-color-1976d2 {
+    color: #1976D2 !important;
+}
+.ace-todo-attack .ace_heading-line.heading-color-2196f3 {
+    color: #2196F3 !important;
+}
+.ace-todo-attack .ace_heading-line.heading-color-64b5f6 {
+    color: #64B5F6 !important;
+}
+.ace-todo-attack .ace_heading-line.heading-color-4caf50 {
+    color: #4CAF50 !important;
+}
+.ace-todo-attack .ace_heading-line.heading-color-8bc34a {
+    color: #8BC34A !important;
+}
+.ace-todo-attack .ace_heading-line.heading-color-ffc107 {
+    color: #FFC107 !important;
+}
+.ace-todo-attack .ace_heading-line.heading-color-ff9800 {
+    color: #FF9800 !important;
+}
+.ace-todo-attack .ace_heading-line.heading-color-f44336 {
+    color: #F44336 !important;
+}
+.ace-todo-attack .ace_heading-line.heading-color-9c27b0 {
+    color: #9C27B0 !important;
+}
+.ace-todo-attack .ace_heading-line.heading-color-673ab7 {
+    color: #673AB7 !important;
+}
+
+/* Force grey color for hashes and hex codes in Monaco Editor */
+.monaco-editor .mtk10,
+.monaco-editor .mtkb,
+.monaco-editor .view-lines .mtk10,
+.monaco-editor .view-lines .mtkb,
+.monaco-editor .view-line .mtk10,
+.monaco-editor .view-line .mtkb {
+    color: #888888 !important;
+    -webkit-text-fill-color: #888888 !important;
+    text-fill-color: #888888 !important;
+    fill: #888888 !important;
+    stroke: #888888 !important;
+    opacity: 1 !important;
+}
+
+/* Force color on all children and override any other styles */
+.ace-todo-attack .ace_heading-line,
+.ace-todo-attack .ace_heading-line *,
+.ace-todo-attack .ace_heading-line .ace_markup,
+.ace-todo-attack .ace_heading-line .ace_markup *,
+.ace-todo-attack .ace_heading-line .ace_punctuation,
+.ace-todo-attack .ace_heading-line .ace_heading,
+.ace-todo-attack .ace_heading-line .ace_heading * {
+    color: inherit !important;
+    background: transparent !important;
+    text-shadow: none !important;
+    font-weight: bold !important;
+    font-family: inherit !important;
 }
 
 .ace-todo-attack .ace_invisible {
