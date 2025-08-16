@@ -167,6 +167,51 @@ function initEditor() {
             const lineNumber = selection.positionLineNumber;
             const line = model.getLineContent(lineNumber);
             
+            // If line is blank, default enter behavior (new line)
+            if (line.trim() === '') {
+                editor.trigger('keyboard', 'type', { text: '\n' });
+                return;
+            }
+
+            // Handle heading lines
+            // Matches up to ###, captures optional trailing hex color (e.g., #1976D2)
+            const headingMatch = line.match(/^(#{1,3})\s+(.+?)(\s+#[0-9A-Fa-f]{6})?\s*$/);
+            if (headingMatch) {
+                const hasHex = !!headingMatch[3];
+                if (!hasHex) {
+                    // Find nearest previous heading with a hex color
+                    const lines = model.getLinesContent();
+                    let inheritedHex = null;
+                    for (let i = lineNumber - 2; i >= 0; i--) { // 0-based index
+                        const m = lines[i].match(/^#{1,3}\s+.*\s+(#[0-9A-Fa-f]{6})\s*$/);
+                        if (m) { inheritedHex = m[1]; break; }
+                    }
+
+                    // Default if no hex exists ABOVE (spec requires inheriting from above; otherwise use default)
+                    if (!inheritedHex) {
+                        // If there is truly no hex anywhere in the file, we still default to #1976D2.
+                        // We won't inherit from below headings per spec wording.
+                        inheritedHex = '#1976D2';
+                    }
+
+                    // Append the hex to the current heading line
+                    const trimmedRight = line.replace(/\s+$/, '');
+                    const newHeading = `${trimmedRight} ${inheritedHex}`;
+                    model.pushEditOperations(
+                        [],
+                        [{
+                            range: new monaco.Range(lineNumber, 1, lineNumber, line.length + 1),
+                            text: newHeading
+                        }],
+                        () => null
+                    );
+                }
+
+                // After ensuring hex, perform default enter behavior
+                editor.trigger('keyboard', 'type', { text: '\n' });
+                return;
+            }
+
             // Only handle task lines
             if (/^\s*[-*+]\s*\[.\]/.test(line)) {
                 const indentMatch = line.match(/^(\s*)/);
@@ -221,7 +266,7 @@ function initEditor() {
             }
             
             // Default enter behavior
-            editor.trigger('keyboard', 'enter', {});
+            editor.trigger('keyboard', 'type', { text: '\n' });
         }
     });
     
@@ -453,6 +498,11 @@ function initEditor() {
     // Apply heading colors after render and file load
     editor.getModel().onDidChangeContent(() => {
         applyHeadingColors();
+        // If Kanban is visible, re-render it to reflect changes
+        const kanbanEl = document.getElementById('kanban');
+        if (kanbanEl && kanbanEl.style.display !== 'none') {
+            renderKanban();
+        }
     });
     
     // Initial apply
@@ -798,9 +848,137 @@ function setupAutoCompletion() {
     // Monaco's completion is enabled by default when a provider is registered
 }
 
+// ===== Kanban View =====
+function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function parseTasks() {
+    if (!editor) return [];
+    const model = editor.getModel();
+    const lines = model.getLinesContent();
+    const tasks = [];
+    let lastHeading = null;
+    let lastColor = '#1976D2';
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const h = line.match(/^(#{1,3})\s+(.*?)(?:\s+(#[0-9A-Fa-f]{6}))?\s*$/);
+        if (h) {
+            lastHeading = h[2].trim();
+            if (h[3]) lastColor = h[3];
+            continue;
+        }
+        const m = line.match(/^(\s*)[-*+]\s*\[([ x/])\]\s*(.*)$/);
+        if (m) {
+            const statusCh = m[2];
+            let status = 'backlog';
+            if (statusCh === '/') status = 'inprogress';
+            else if (statusCh === 'x') status = 'done';
+            const text = m[3];
+            const tags = (text.match(/\+[\w-]+/g) || []).join(' ');
+            const due = (text.match(/\bdue:\d{4}-\d{2}-\d{2}\b/) || [null])[0];
+            tasks.push({
+                id: `ln-${i + 1}`,
+                lineNumber: i + 1,
+                status,
+                text,
+                heading: lastHeading,
+                color: lastColor || '#1976D2',
+                tags,
+                due
+            });
+        }
+    }
+    return tasks;
+}
+
+function attachDragHandlers(card) {
+    card.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('text/plain', card.dataset.lineNumber);
+        e.dataTransfer.effectAllowed = 'move';
+    });
+}
+
+function attachDropHandlers(zone) {
+    zone.addEventListener('dragover', e => {
+        e.preventDefault();
+        zone.classList.add('drag-over');
+        e.dataTransfer.dropEffect = 'move';
+    });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        const ln = parseInt(e.dataTransfer.getData('text/plain'), 10);
+        const targetStatus = zone.dataset.status;
+        if (!ln || !targetStatus) return;
+        updateTaskStatusAtLine(ln, targetStatus);
+        renderKanban();
+    });
+}
+
+function updateTaskStatusAtLine(lineNumber, targetStatus) {
+    const model = editor.getModel();
+    const line = model.getLineContent(lineNumber);
+    const mapped = { backlog: ' ', inprogress: '/', done: 'x' };
+    const ch = mapped[targetStatus] || ' ';
+    // Support -, *, + bullets
+    const newLine = line.replace(/^(\s*[-*+]\s*\[)([ x/])(\])/, (m, p1, _s, p3) => p1 + ch + p3);
+    if (newLine !== line) {
+        model.pushEditOperations([], [{
+            range: new monaco.Range(lineNumber, 1, lineNumber, line.length + 1),
+            text: newLine
+        }], () => null);
+    }
+}
+
+function renderKanban() {
+    const tasks = parseTasks();
+    const zones = {
+        backlog: document.querySelector('.kanban-dropzone[data-status="backlog"]'),
+        inprogress: document.querySelector('.kanban-dropzone[data-status="inprogress"]'),
+        done: document.querySelector('.kanban-dropzone[data-status="done"]')
+    };
+    Object.values(zones).forEach(z => { if (z) z.innerHTML = ''; });
+    tasks.forEach(t => {
+        const card = document.createElement('div');
+        card.className = 'kanban-card';
+        card.draggable = true;
+        card.dataset.lineNumber = String(t.lineNumber);
+        card.style.borderLeftColor = t.color || '#1976D2';
+        card.innerHTML = `
+            <div class="title">${escapeHtml(t.text)}</div>
+            <div class="meta">${escapeHtml(t.heading || 'Uncategorized')}${t.tags ? ' · ' + escapeHtml(t.tags) : ''}${t.due ? ' · ' + escapeHtml(t.due) : ''}</div>
+        `;
+        attachDragHandlers(card);
+        const zone = zones[t.status] || zones.backlog;
+        zone && zone.appendChild(card);
+    });
+    Object.values(zones).forEach(z => z && attachDropHandlers(z));
+}
+
+function toggleKanbanView() {
+    const editorContainer = document.querySelector('.editor-container');
+    const kanban = document.getElementById('kanban');
+    const btn = document.getElementById('kanbanToggle');
+    const showingKanban = kanban && kanban.style.display !== 'none' && kanban.style.display !== '';
+    if (showingKanban) {
+        if (kanban) kanban.style.display = 'none';
+        if (editorContainer) editorContainer.style.display = 'flex';
+        if (btn) btn.textContent = '🗂️ Kanban';
+        if (editor) { editor.layout(); editor.focus(); }
+    } else {
+        if (editorContainer) editorContainer.style.display = 'none';
+        if (kanban) kanban.style.display = 'block';
+        if (btn) btn.textContent = '📄 List';
+        renderKanban();
+    }
+}
+
 // Initialize function to be called from HTML
 globalThis.initEditor = initEditor;
 globalThis.setupAutoCompletion = setupAutoCompletion;
+globalThis.toggleKanbanView = toggleKanbanView;
 
 // Prevent default browser shortcuts that conflict with our custom ones
 document.addEventListener('keydown', function(e) {

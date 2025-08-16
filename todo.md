@@ -1,7 +1,7 @@
 # Work #1976D2
 ## Business Banking #2196F3
 ### Deregistering Businesses #64B5F6
-- [ ] Simulation   
+- [x] Simulation   
     - [x] Scenario 1
     - [x] Scenario 2
     - [x] Scenario 3
@@ -10,33 +10,31 @@
         - [x] Imaging email to file
     - [x] Scenario 4
         - [x] Remove unused slides
-    - [ ] Check logic
-    - [ ] Remove border on the first page
-    - [ ] Scenario 1
-        - [ ] ASIC connect instructions should be italicized
-        - [ ] CommSee instructions should be italicized
-        - [ ] Didn't change state when finished
+    - [x] Check logic
+    - [x] Remove border on the first page
+- [x] Redact audio
+- [ ] Send audio files to Brittany
+- [ ] Send handover email to Brittany and Laura
 
-### Backend Tasks #42A5F5  
+### Health #42A5F5
 - [ ] user authentication API +api +security due:2025-01-22
 
-## Internal Tools Project #1E88E5
-### Development #1976D2
-- [ ] add unit tests +testing +backend
 
-# Personal #4CAF50
+# Family #4CAF50
 ## Home Improvement #66BB6A
 ### Kitchen Renovation #81C784
 - [/] get contractor quotes +research due:2025-01-30
 - [x] measure countertops
 
-### Garden Project #A5D6A7
-- [ ] plant spring vegetables +gardening due:2025-03-15
-
 # Study #FF9800
-## React Course #FFB74D
+## Vibe coding #FFB74D
 ### Todo Attack #FFCC02
 - [x] Bold headings
-- [/] Auto start new task when pressing enter on a task
-- [/] Only offer completion for tags, due dates, etc.
-- [/] Hashes should be the same colour as the heading, as should the hex code
+- [x] Auto start new task when pressing enter on a task
+- [x] Only offer completion for tags, due dates, etc.
+- [x] Hashes should be the same colour as the heading, as should the hex code
+- [ ] Pressing enter on a blank line should give a new line
+- [ ] Pressing enter on a heading line should also give a new line
+- [ ] Pressing enter on a heading line without a hex code should automatcally use the hex code of the heading that is above it. If there is no hex code in the file, use #1976D2
+
+### Digital Dice #FFCC02

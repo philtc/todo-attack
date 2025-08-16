@@ -174,6 +174,17 @@
         .mtk10 {
             color: grey !important;
         }
+
+        /* Kanban styles */
+        .kanban-container { display: none; height: calc(100vh - 90px); padding: 12px; }
+        .kanban-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; height: 100%; }
+        .kanban-column { background: rgba(0,0,0,0.2); border: 1px solid var(--button-hover); border-radius: 6px; display: flex; flex-direction: column; }
+        .kanban-column h3 { margin: 0; padding: 10px 12px; border-bottom: 1px solid var(--button-hover); font-size: 1rem; }
+        .kanban-dropzone { flex: 1; overflow: auto; padding: 10px; }
+        .kanban-card { background: rgba(0,0,0,0.15); border-left: 6px solid #1976D2; border-radius: 4px; padding: 8px 10px; margin-bottom: 8px; cursor: grab; user-select: none; }
+        .kanban-card:active { cursor: grabbing; }
+        .kanban-card .meta { opacity: 0.8; font-size: 12px; margin-top: 4px; }
+        .kanban-dropzone.drag-over { outline: 2px dashed #888; outline-offset: -6px; }
     </style>
 </head>
 <body>
@@ -183,6 +194,7 @@
             <button class="btn" onclick="loadFile()">📂 Load</button>
             <button class="btn success" onclick="saveFile()">💾 Save</button>
             <button class="btn warning" onclick="insertTask()">➕ New Task</button>
+            <button id="kanbanToggle" class="btn" title="Switch to Kanban" onclick="toggleKanbanView()">🗂️ Kanban</button>
             <button id="themeToggle" class="btn theme-toggle" title="Toggle Theme">🌓</button>
             <button class="btn" onclick="toggleHelp()">❓ Help</button>
             <div id="status" class="status" style="display: none;"></div>
@@ -191,6 +203,23 @@
     
     <div class="editor-container">
         <div id="editor"></div>
+    </div>
+
+    <div id="kanban" class="kanban-container">
+        <div class="kanban-board">
+            <div class="kanban-column" data-status="backlog">
+                <h3>Backlog</h3>
+                <div class="kanban-dropzone" data-status="backlog"></div>
+            </div>
+            <div class="kanban-column" data-status="inprogress">
+                <h3>In-progress</h3>
+                <div class="kanban-dropzone" data-status="inprogress"></div>
+            </div>
+            <div class="kanban-column" data-status="done">
+                <h3>Done</h3>
+                <div class="kanban-dropzone" data-status="done"></div>
+            </div>
+        </div>
     </div>
     
     <div id="shortcuts-help" class="shortcuts-help">
@@ -239,6 +268,10 @@
             
             // Set up theme toggle button
             document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+            // Ensure toggle button text matches initial view
+            const kb = document.getElementById('kanbanToggle');
+            if (kb) kb.textContent = '🗂️ Kanban';
         });
         
         // Show status message
