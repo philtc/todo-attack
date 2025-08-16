@@ -109,6 +109,16 @@
             background: #e67e22;
         }
         
+        /* Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 2000; }
+        .modal { background: var(--bg-color); color: var(--text-color); border: 1px solid var(--button-hover); border-radius: 8px; width: min(520px, 92vw); box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
+        .modal header { padding: 12px 16px; border-bottom: 1px solid var(--button-hover); font-weight: 600; }
+        .modal .body { padding: 12px 16px; display: grid; gap: 10px; }
+        .modal .row { display: grid; gap: 6px; }
+        .modal .row label { font-size: 12px; opacity: 0.85; }
+        .modal input[type="text"], .modal select, .modal input[type="date"] { background: var(--button-bg); color: var(--text-color); border: 1px solid var(--button-hover); border-radius: 4px; padding: 8px; }
+        .modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--button-hover); }
+        
         .status {
             position: fixed;
             bottom: 20px;
@@ -192,9 +202,12 @@
         <h1>📝 Todo Attack - Web Editor</h1>
         <div class="controls">
             <button class="btn" onclick="loadFile()">📂 Load</button>
+            <button class="btn" onclick="loadFile()">📂 Load</button>
             <button class="btn success" onclick="saveFile()">💾 Save</button>
-            <button class="btn warning" onclick="insertTask()">➕ New Task</button>
             <button id="kanbanToggle" class="btn" title="Switch to Kanban" onclick="toggleKanbanView()">🗂️ Kanban</button>
+            <button id="ganttToggle" class="btn" title="Switch to Gantt" onclick="toggleGanttView()">📊 Gantt</button>
+            <button class="btn" title="New Task" onclick="openNewTaskDialog()">➕ New Task</button>
+            <button id="kanbanFilterBtn" class="btn" title="Filter Kanban" onclick="openKanbanFilter()">🔎 Filter</button>
             <button id="themeToggle" class="btn theme-toggle" title="Toggle Theme">🌓</button>
             <button class="btn" onclick="toggleHelp()">❓ Help</button>
             <div id="status" class="status" style="display: none;"></div>
@@ -220,6 +233,11 @@
                 <div class="kanban-dropzone" data-status="done"></div>
             </div>
         </div>
+    </div>
+    
+    <!-- Gantt placeholder -->
+    <div id="gantt" class="kanban-container" style="display:none; padding: 12px;">
+        <div id="ganttBoard" style="overflow:auto; white-space: nowrap;"></div>
     </div>
     
     <div id="shortcuts-help" class="shortcuts-help">

@@ -1,6 +1,7 @@
 // Todo Attack Web Editor - Main Application
 let editor;
 let currentFile = 'todo.md';
+let kanbanFilters = { tags: [], priorities: [], statuses: [] };
 
 // Apply heading colors from hex codes
 function applyHeadingColors() {
@@ -308,11 +309,24 @@ function initEditor() {
                 
                 // Only create a range if there's content to fold
                 if (current.lineNumber < endLine) {
-                    ranges.push({
-                        start: current.lineNumber,
-                        end: endLine,
-                        kind: monaco.languages.FoldingRangeKind.Region
-                    });
+                    // Prefer to start folding at a blank line immediately after the heading,
+                    // so a spacer line remains visible under the heading when folded.
+                    let startLine = current.lineNumber;
+                    const nextLineNumber = current.lineNumber + 1;
+                    if (nextLineNumber <= endLine) {
+                        const nextLineText = model.getLineContent(nextLineNumber);
+                        if (/^\s*$/.test(nextLineText)) {
+                            startLine = nextLineNumber;
+                        }
+                    }
+                    // Ensure start is not beyond end
+                    if (startLine <= endLine) {
+                        ranges.push({
+                            start: startLine,
+                            end: endLine,
+                            kind: monaco.languages.FoldingRangeKind.Region
+                        });
+                    }
                 }
             }
             
@@ -509,6 +523,39 @@ function initEditor() {
     setTimeout(applyHeadingColors, 500);
 }
 
+// Apply priority color decorations for (b) orange and (c) grey
+function applyPriorityDecorations() {
+    if (!editor) return;
+    const model = editor.getModel();
+    const lines = model.getLinesContent();
+    const decorations = [];
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const bIdx = line.indexOf('(b)');
+        const cIdx = line.indexOf('(c)');
+        if (bIdx !== -1) {
+            decorations.push({
+                range: new monaco.Range(i + 1, bIdx + 1, i + 1, bIdx + 4),
+                options: { inlineClassName: 'prio-b' }
+            });
+        }
+        if (cIdx !== -1) {
+            decorations.push({
+                range: new monaco.Range(i + 1, cIdx + 1, i + 1, cIdx + 4),
+                options: { inlineClassName: 'prio-c' }
+            });
+        }
+    }
+    editor.deltaDecorations([], decorations);
+    // Inject styles once
+    if (!document.getElementById('priority-colors')) {
+        const s = document.createElement('style');
+        s.id = 'priority-colors';
+        s.textContent = `.prio-b{ color:#f39c12 !important; } .prio-c{ color:#888888 !important; }`;
+        document.head.appendChild(s);
+    }
+}
+
 // Set up custom keyboard shortcuts
 function setupKeyboardShortcuts() {
     // Add our custom commands
@@ -571,6 +618,8 @@ function loadFile() {
             const model = editor.getModel();
             model.setValue(data.content);
             showStatus('File loaded successfully', 'success');
+            applyHeadingColors();
+            applyPriorityDecorations();
         } else {
             showStatus('Error: ' + (data.error || 'Unknown error occurred'), 'error');
         }
@@ -877,6 +926,8 @@ function parseTasks() {
             const text = m[3];
             const tags = (text.match(/\+[\w-]+/g) || []).join(' ');
             const due = (text.match(/\bdue:\d{4}-\d{2}-\d{2}\b/) || [null])[0];
+            const start = (text.match(/\bstart:\d{4}-\d{2}-\d{2}\b/) || [null])[0];
+            const prio = (text.match(/\(([abc])\)/) || [null, null])[1];
             tasks.push({
                 id: `ln-${i + 1}`,
                 lineNumber: i + 1,
@@ -885,7 +936,9 @@ function parseTasks() {
                 heading: lastHeading,
                 color: lastColor || '#1976D2',
                 tags,
-                due
+                due,
+                start,
+                priority: prio
             });
         }
     }
@@ -933,7 +986,20 @@ function updateTaskStatusAtLine(lineNumber, targetStatus) {
 }
 
 function renderKanban() {
-    const tasks = parseTasks();
+    let tasks = parseTasks();
+    // Apply filters
+    if (kanbanFilters.statuses.length) {
+        tasks = tasks.filter(t => kanbanFilters.statuses.includes(t.status));
+    }
+    if (kanbanFilters.priorities.length) {
+        tasks = tasks.filter(t => kanbanFilters.priorities.includes((t.priority||'').toLowerCase()));
+    }
+    if (kanbanFilters.tags.length) {
+        tasks = tasks.filter(t => {
+            const tagList = (t.tags||'').split(/\s+/).filter(Boolean).map(s=>s.replace(/^\+/, ''));
+            return kanbanFilters.tags.every(f => tagList.includes(f.replace(/^\+/, '')));
+        });
+    }
     const zones = {
         backlog: document.querySelector('.kanban-dropzone[data-status="backlog"]'),
         inprogress: document.querySelector('.kanban-dropzone[data-status="inprogress"]'),
@@ -975,10 +1041,265 @@ function toggleKanbanView() {
     }
 }
 
+// ===== New Task Dialog =====
+function ensureModal() {
+    let overlay = document.getElementById('modalOverlay');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'modalOverlay';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true">
+            <header>New Task</header>
+            <div class="body">
+                <div class="row"><label>Project / Heading</label><select id="ntHeading"></select></div>
+                <div class="row"><label>Task text</label><input id="ntText" type="text" placeholder="e.g. Implement feature +ui (b)"></div>
+                <div class="row" style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div class="row"><label>Start</label><input id="ntStart" type="date"></div>
+                    <div class="row"><label>Due</label><input id="ntDue" type="date"></div>
+                </div>
+            </div>
+            <footer>
+                <button class="btn" id="ntCancel">Cancel</button>
+                <button class="btn success" id="ntCreate">Add Task</button>
+            </footer>
+        </div>`;
+    overlay.addEventListener('click', (e)=>{ if (e.target === overlay) closeNewTaskDialog(); });
+    document.body.appendChild(overlay);
+    return overlay;
+}
+
+function collectHeadings() {
+    const model = editor.getModel();
+    const lines = model.getLinesContent();
+    const heads = [];
+    for (let i=0;i<lines.length;i++) {
+        const m = lines[i].match(/^(#{1,3})\s+(.*?)(?:\s+(#[0-9A-Fa-f]{6}))?\s*$/);
+        if (m) heads.push({ line: i+1, level: m[1].length, title: m[2] });
+    }
+    return heads;
+}
+
+function openNewTaskDialog() {
+    const overlay = ensureModal();
+    const headingSelect = overlay.querySelector('#ntHeading');
+    headingSelect.innerHTML = '';
+    const heads = collectHeadings();
+    heads.forEach(h => {
+        const opt = document.createElement('option');
+        opt.value = String(h.line);
+        opt.textContent = `${'#'.repeat(h.level)} ${h.title}`;
+        headingSelect.appendChild(opt);
+    });
+    overlay.style.display = 'flex';
+    overlay.querySelector('#ntText').value = '';
+    overlay.querySelector('#ntStart').valueAsDate = null;
+    overlay.querySelector('#ntDue').valueAsDate = null;
+    overlay.querySelector('#ntCancel').onclick = closeNewTaskDialog;
+    overlay.querySelector('#ntCreate').onclick = createTaskFromDialog;
+}
+
+function closeNewTaskDialog() {
+    const overlay = document.getElementById('modalOverlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+function createTaskFromDialog() {
+    const overlay = document.getElementById('modalOverlay');
+    if (!overlay) return;
+    const sel = overlay.querySelector('#ntHeading');
+    const text = overlay.querySelector('#ntText').value.trim();
+    const start = overlay.querySelector('#ntStart').value;
+    const due = overlay.querySelector('#ntDue').value;
+    if (!text) { showStatus('Enter task text', 'error'); return; }
+    const targetLine = parseInt(sel.value, 10) || 1;
+    insertTaskUnderHeading(targetLine, text, { start, due });
+    closeNewTaskDialog();
+    showStatus('Task added', 'success');
+}
+
+function insertTaskUnderHeading(headingLine, text, meta) {
+    const model = editor.getModel();
+    const total = model.getLineCount();
+    // Find insertion line: after heading, before next heading with level <= current
+    const headingLineText = model.getLineContent(headingLine);
+    const m = headingLineText.match(/^(#{1,3})\s/);
+    const level = m ? m[1].length : 1;
+    let insertAt = headingLine + 1;
+    for (let ln = headingLine + 1; ln <= total; ln++) {
+        const t = model.getLineContent(ln);
+        const h = t.match(/^(#{1,3})\s/);
+        if (h && h[1].length <= level) { break; }
+        insertAt = ln + 1;
+    }
+    const pieces = ['- [ ]', text];
+    if (meta?.start) pieces.push(`start:${meta.start}`);
+    if (meta?.due) pieces.push(`due:${meta.due}`);
+    const lineText = pieces.join(' ');
+    const rng = new monaco.Range(insertAt, 1, insertAt, 1);
+    model.pushEditOperations([], [{ range: rng, text: lineText + '\n' }], () => null);
+}
+
+// ===== Kanban Filters =====
+function openKanbanFilter() {
+    // Reuse modal shell
+    const overlay = ensureModal();
+    const modal = overlay.querySelector('.modal');
+    modal.querySelector('header').textContent = 'Kanban Filter';
+    modal.querySelector('.body').innerHTML = `
+        <div class="row"><label>Statuses</label>
+            <label><input type="checkbox" value="backlog" class="kf-status"> Backlog</label>
+            <label><input type="checkbox" value="inprogress" class="kf-status"> In-progress</label>
+            <label><input type="checkbox" value="done" class="kf-status"> Done</label>
+        </div>
+        <div class="row"><label>Priorities</label>
+            <label><input type="checkbox" value="a" class="kf-prio"> (a)</label>
+            <label><input type="checkbox" value="b" class="kf-prio"> (b)</label>
+            <label><input type="checkbox" value="c" class="kf-prio"> (c)</label>
+        </div>
+        <div class="row"><label>Tags (comma separated, without +)</label>
+            <input type="text" id="kf-tags" placeholder="ui, api">
+        </div>`;
+    modal.querySelector('footer').innerHTML = `
+        <button class="btn" id="kfCancel">Cancel</button>
+        <button class="btn" id="kfClear">Clear</button>
+        <button class="btn success" id="kfApply">Apply</button>`;
+    overlay.style.display = 'flex';
+    modal.querySelector('#kfCancel').onclick = closeNewTaskDialog;
+    modal.querySelector('#kfClear').onclick = () => { kanbanFilters = { tags: [], priorities: [], statuses: [] }; renderKanban(); closeNewTaskDialog(); };
+    modal.querySelector('#kfApply').onclick = () => {
+        const statuses = Array.from(modal.querySelectorAll('.kf-status:checked')).map(i=>i.value);
+        const priorities = Array.from(modal.querySelectorAll('.kf-prio:checked')).map(i=>i.value);
+        const tagsRaw = modal.querySelector('#kf-tags').value.trim();
+        const tags = tagsRaw ? tagsRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+        kanbanFilters = { statuses, priorities, tags };
+        renderKanban();
+        closeNewTaskDialog();
+    };
+}
+
+// ===== Gantt (Placeholder) =====
+function toggleGanttView() {
+    const editorContainer = document.querySelector('.editor-container');
+    const kanban = document.getElementById('kanban');
+    const gantt = document.getElementById('gantt');
+    const btn = document.getElementById('ganttToggle');
+    const showing = gantt && gantt.style.display !== 'none' && gantt.style.display !== '';
+    if (showing) {
+        if (gantt) gantt.style.display = 'none';
+        if (editorContainer) editorContainer.style.display = 'flex';
+        if (btn) btn.textContent = '📊 Gantt';
+        if (editor) { editor.layout(); editor.focus(); }
+    } else {
+        if (editorContainer) editorContainer.style.display = 'none';
+        if (kanban) kanban.style.display = 'none';
+        if (gantt) { gantt.style.display = 'block'; renderGantt(); }
+        if (btn) btn.textContent = '📄 List';
+    }
+}
+
+function renderGantt() {
+    const el = document.getElementById('ganttBoard');
+    if (!el) return;
+    el.innerHTML = '';
+    const tasks = parseTasks();
+    // Simple timeline: next 30 days
+    const dayMs = 24*3600*1000;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const startWindow = today;
+    const endWindow = new Date(today.getTime() + 29*dayMs);
+    const widthPerDay = 24; // px
+    // Header
+    const header = document.createElement('div');
+    header.style.position='sticky'; header.style.top='0'; header.style.background='var(--bg-color)'; header.style.borderBottom='1px solid var(--button-hover)'; header.style.whiteSpace='nowrap';
+    for (let d=0; d<30; d++) {
+        const cell = document.createElement('span');
+        cell.style.display='inline-block'; cell.style.width=widthPerDay+'px'; cell.style.textAlign='center'; cell.style.fontSize='10px'; cell.style.opacity='0.8';
+        const dt = new Date(startWindow.getTime()+d*dayMs);
+        cell.textContent = String(dt.getDate()).padStart(2,'0');
+        header.appendChild(cell);
+    }
+    el.appendChild(header);
+    // Rows
+    tasks.forEach(t => {
+        const row = document.createElement('div');
+        row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.style.margin='6px 0';
+        const label = document.createElement('div');
+        label.textContent = (t.text||'').slice(0,40);
+        label.style.width='240px'; label.style.flex='0 0 auto'; label.style.overflow='hidden'; label.style.textOverflow='ellipsis';
+        const lane = document.createElement('div');
+        lane.style.position='relative'; lane.style.height='18px'; lane.style.flex='1 1 auto'; lane.style.borderBottom='1px dashed var(--button-hover)';
+        const bar = document.createElement('div');
+        bar.className = 'gantt-bar';
+        bar.dataset.lineNumber = String(t.lineNumber);
+        bar.style.position='absolute'; bar.style.height='12px'; bar.style.borderRadius='3px'; bar.style.background=t.color||'#1976D2'; bar.style.opacity='0.85';
+        // Position by start/due; default: single-day at today index 0
+        const startStr = (t.start||'').replace('start:','');
+        const dueStr = (t.due||'').replace('due:','');
+        const sDate = startStr ? new Date(startStr) : today;
+        const eDate = dueStr ? new Date(dueStr) : new Date((startStr? sDate: today).getTime()+dayMs);
+        const clamp = (d) => Math.max(0, Math.min(29, Math.floor((d - startWindow)/dayMs)));
+        const left = clamp(sDate) * widthPerDay;
+        const right = clamp(eDate) * widthPerDay;
+        const width = Math.max(widthPerDay, right - left || widthPerDay);
+        bar.style.left = left + 'px';
+        bar.style.width = width + 'px';
+        // Drag to adjust dates (simple horizontal drag)
+        let dragStartX = null; let origLeft=0; let origWidth=0; let mode='move';
+        bar.addEventListener('mousedown', (e)=>{
+            dragStartX = e.clientX; origLeft = parseInt(bar.style.left,10)||0; origWidth = parseInt(bar.style.width,10)||0;
+            const rect = bar.getBoundingClientRect();
+            mode = (e.clientX - rect.left) < 6 ? 'start' : ((rect.right - e.clientX) < 6 ? 'end' : 'move');
+            e.preventDefault();
+        });
+        window.addEventListener('mousemove', (e)=>{
+            if (dragStartX==null) return;
+            const dx = e.clientX - dragStartX;
+            if (mode==='move') { bar.style.left = (origLeft + dx) + 'px'; }
+            else if (mode==='start') { const nl = Math.min(origLeft+origWidth- widthPerDay, origLeft + dx); bar.style.left = nl + 'px'; bar.style.width = (origWidth + (origLeft - nl)) + 'px'; }
+            else { bar.style.width = Math.max(widthPerDay, origWidth + dx) + 'px'; }
+        });
+        window.addEventListener('mouseup', ()=>{
+            if (dragStartX==null) return;
+            // Snap to days and write back to line
+            const ln = parseInt(bar.dataset.lineNumber, 10);
+            const leftPx = parseInt(bar.style.left,10)||0;
+            const widthPx = parseInt(bar.style.width,10)||0;
+            const startIdx = Math.round(leftPx / widthPerDay);
+            const endIdx = Math.round((leftPx + widthPx) / widthPerDay);
+            const s = new Date(startWindow.getTime() + startIdx*dayMs);
+            const e = new Date(startWindow.getTime() + endIdx*dayMs);
+            updateTaskDatesAtLine(ln, s, e);
+            dragStartX = null;
+        });
+        lane.appendChild(bar);
+        row.appendChild(label);
+        row.appendChild(lane);
+        el.appendChild(row);
+    });
+}
+
+function updateTaskDatesAtLine(lineNumber, startDate, endDate) {
+    const model = editor.getModel();
+    const line = model.getLineContent(lineNumber);
+    const format = (d)=> d.toISOString().slice(0,10);
+    let newLine = line;
+    // Replace or add start
+    if (/\bstart:\d{4}-\d{2}-\d{2}\b/.test(newLine)) newLine = newLine.replace(/start:\d{4}-\d{2}-\d{2}/, `start:${format(startDate)}`);
+    else newLine += (newLine.endsWith(' ')?'':' ') + `start:${format(startDate)}`;
+    // Replace or add due
+    if (/\bdue:\d{4}-\d{2}-\d{2}\b/.test(newLine)) newLine = newLine.replace(/due:\d{4}-\d{2}-\d{2}/, `due:${format(endDate)}`);
+    else newLine += (newLine.endsWith(' ')?'':' ') + `due:${format(endDate)}`;
+    model.pushEditOperations([], [{ range: new monaco.Range(lineNumber, 1, lineNumber, line.length + 1), text: newLine }], () => null);
+}
+
 // Initialize function to be called from HTML
 globalThis.initEditor = initEditor;
 globalThis.setupAutoCompletion = setupAutoCompletion;
 globalThis.toggleKanbanView = toggleKanbanView;
+globalThis.openNewTaskDialog = openNewTaskDialog;
+globalThis.openKanbanFilter = openKanbanFilter;
+globalThis.toggleGanttView = toggleGanttView;
 
 // Prevent default browser shortcuts that conflict with our custom ones
 document.addEventListener('keydown', function(e) {
